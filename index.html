@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تلفازي المباشر</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { margin: 0; background-color: #121212; color: white; font-family: sans-serif; }
+        .header { background: #8b0000; padding: 15px; text-align: center; font-weight: bold; font-size: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .container { padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .card { background: #1e1e1e; border-radius: 10px; width: 45%; padding: 10px; text-align: center; cursor: pointer; transition: 0.2s; border: 1px solid #333; }
+        .card:active { transform: scale(0.95); background: #333; }
+        .card img { width: 50px; height: 50px; margin-bottom: 5px; }
+        .card h3 { margin: 5px 0; font-size: 14px; }
+        #player-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 999; flex-direction: column; justify-content: center; align-items: center; }
+        video { width: 100%; max-height: 100vh; }
+        .close-btn { position: absolute; top: 20px; right: 20px; color: white; background: red; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; z-index: 1000; }
+        .status { text-align: center; margin-top: 20px; color: #888; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">⚽ TV Live Sports</div>
+    
+    <div id="loading" style="text-align:center; margin-top:50px;">جاري جلب القنوات... ⏳</div>
+    <div class="container" id="channels-list"></div>
+    <div class="status" id="last-update"></div>
+
+    <div id="player-modal">
+        <div class="close-btn" onclick="closePlayer()">X إغلاق</div>
+        <video id="video" controls autoplay></video>
+    </div>
+
+    <script>
+        // رابط ملف القنوات الخاص بك (سيتم جلبه تلقائياً)
+        const jsonUrl = 'channels.json';
+
+        fetch(jsonUrl)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('last-update').innerText = 'آخر تحديث: ' + data.updated_at;
+                
+                const list = document.getElementById('channels-list');
+                data.channels.forEach(channel => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <img src="${channel.logo}" alt="logo">
+                        <h3>${channel.name}</h3>
+                    `;
+                    card.onclick = () => openPlayer(channel.stream_url);
+                    list.appendChild(card);
+                });
+            })
+            .catch(err => {
+                document.getElementById('loading').innerText = 'فشل في تحميل القنوات. تأكد أن الروبوت عمل بنجاح.';
+            });
+
+        function openPlayer(url) {
+            document.getElementById('player-modal').style.display = 'flex';
+            var video = document.getElementById('video');
+            
+            if (Hls.isSupported()) {
+                var hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play();
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play();
+                });
+            }
+        }
+
+        function closePlayer() {
+            document.getElementById('player-modal').style.display = 'none';
+            document.getElementById('video').pause();
+            document.getElementById('video').src = "";
+        }
+    </script>
+</body>
+</html>
