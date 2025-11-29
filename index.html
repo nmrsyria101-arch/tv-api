@@ -1,107 +1,120 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مباريات اليوم المباشرة</title>
-    <style>
-        body { margin: 0; background-color: #121212; color: white; font-family: sans-serif; }
-        .header { background: #a00; padding: 15px; text-align: center; font-weight: bold; font-size: 18px; position: sticky; top:0; z-index: 10; }
-        
-        .container { padding: 10px; max-width: 600px; margin: 0 auto; }
-        
-        .match-card {
-            background: #1e1e1e; border-radius: 12px; padding: 15px; margin-bottom: 12px;
-            border: 1px solid #333; position: relative;
-        }
-        
-        /* الفرق والنتيجة */
-        .teams-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .team { width: 35%; text-align: center; }
-        .team img { width: 45px; height: 45px; object-fit: contain; display: block; margin: 0 auto 5px; }
-        .team span { font-size: 12px; font-weight: bold; display: block; }
-        .vs-area { font-size: 18px; font-weight: bold; color: #888; }
-        
-        /* المعلومات السفلية */
-        .info-area { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; padding-top: 10px; }
-        .ch-name { color: #fc0; font-size: 12px; display: flex; align-items: center; }
-        
-        /* زر المشاهدة */
-        .watch-btn {
-            background: #a00; color: white; padding: 6px 15px; border-radius: 20px; 
-            text-decoration: none; font-size: 12px; font-weight: bold; cursor: pointer; border: none;
-        }
-        .watch-btn.disabled { background: #444; color: #aaa; pointer-events: none; }
-        
-        /* حالة المباشر */
-        .live-badge { 
-            position: absolute; top: 10px; right: 10px; background: red; color: white; 
-            font-size: 10px; padding: 2px 8px; border-radius: 4px; animation: blink 1s infinite;
-        }
-        @keyframes blink { 50% { opacity: 0.5; } }
+import requests
+import json
+import datetime
+import re
+from bs4 import BeautifulSoup
 
-        #loading { text-align: center; margin-top: 50px; color: #888; }
-    </style>
-</head>
-<body>
+# --- إعدادات ---
+# رابط ملف القنوات
+IPTV_URL = "https://gist.githubusercontent.com/yasiralbeatiy/a078d245888ce7eb892e04d120f1420c/raw/a6b268326c30276367a62947e4dc862b1b171410/beinsport.m3u"
+# رابط المباريات (سنستخدم فيلجول لأنه أخف وأسرع من يلا كورة)
+MATCHES_URL = "https://www.filgoal.com/matches/today"
 
-    <div class="header">⚽ جدول مباريات اليوم</div>
-    
-    <div id="loading">جاري تحميل المباريات...</div>
-    <div class="container" id="matches-box"></div>
+def get_iptv_links():
+    print("Fetching IPTV...")
+    channels = {}
+    try:
+        response = requests.get(IPTV_URL, timeout=10)
+        lines = response.text.splitlines()
+        for i, line in enumerate(lines):
+            if "#EXTINF" in line and i+1 < len(lines):
+                # تنظيف الاسم (bein sports 1 -> beinsports1)
+                name = line.split(",")[-1].strip().lower()
+                clean = re.sub(r'[^a-z0-9]', '', name)
+                url = lines[i+1].strip()
+                if url.startswith("http"):
+                    channels[clean] = url
+    except Exception as e:
+        print(f"IPTV Error: {e}")
+    return channels
 
-    <script>
-        fetch('channels.json')
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('loading').style.display = 'none';
-                const box = document.getElementById('matches-box');
+def get_matches():
+    print("Fetching Matches...")
+    matches = []
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        resp = requests.get(MATCHES_URL, headers=headers, timeout=10)
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        
+        # البحث عن المباريات في فيلجول
+        match_cards = soup.find_all('div', class_='mc-block')
+        
+        for card in match_cards:
+            try:
+                # استخراج البيانات
+                teams = card.find_all('div', class_='team-name')
+                if len(teams) < 2: continue
                 
-                if(data.matches.length === 0) {
-                    box.innerHTML = '<div style="text-align:center;">لا توجد مباريات حالياً</div>';
-                    return;
-                }
+                team_a = teams[0].text.strip()
+                team_b = teams[1].text.strip()
+                
+                # الصور (قد لا تكون موجودة أحياناً)
+                imgs = card.find_all('img')
+                logo_a = imgs[0]['src'] if len(imgs) > 0 else ""
+                logo_b = imgs[1]['src'] if len(imgs) > 1 else ""
+                
+                # الوقت
+                time_area = card.find('div', class_='match-timing')
+                time_str = time_area.find('span').text.strip() if time_area else "اليوم"
+                
+                # القناة
+                ch_area = card.find('div', class_='channel-icon')
+                channel = ch_area.text.strip() if ch_area else "غير محدد"
+                
+                matches.append({
+                    "team_a": team_a, "logo_a": logo_a,
+                    "team_b": team_b, "logo_b": logo_b,
+                    "time": time_str,
+                    "channel": channel,
+                    "stream_url": "" # سيتم تعبئته لاحقاً
+                })
+            except:
+                continue
+                
+    except Exception as e:
+        print(f"Scraping Error: {e}")
+        # اضافة رسالة وهمية ليعرف المستخدم أن هناك خطأ
+        matches.append({
+            "team_a": "خطأ في", "logo_a": "",
+            "team_b": "المصدر", "logo_b": "",
+            "time": "الآن", "channel": "حاول لاحقاً",
+            "stream_url": ""
+        })
+        
+    return matches
 
-                data.matches.forEach(m => {
-                    // هل الرابط متوفر؟
-                    const hasLink = m.stream_url && m.stream_url.length > 5;
-                    const btnText = hasLink ? "▶ شاهد الآن" : "الرابط غير متوفر";
-                    const btnClass = hasLink ? "" : "disabled";
-                    
-                    // هل المباراة مباشرة؟
-                    const liveHtml = m.status === 'live' ? '<div class="live-badge">مباشر 🔴</div>' : '';
+def main():
+    # حتى لو فشل شيء، الكود سيكمل للنهاية
+    try:
+        iptv = get_iptv_links()
+        matches = get_matches()
+        
+        final_list = []
+        for match in matches:
+            # محاولة الربط
+            url = ""
+            target = re.sub(r'[^a-z0-9]', '', match['channel'].lower())
+            
+            for key, val in iptv.items():
+                if target in key or key in target:
+                    url = val
+                    break
+            
+            # تصحيح الروابط الناقصة للصور
+            if match['logo_a'] and match['logo_a'].startswith('//'): match['logo_a'] = 'https:' + match['logo_a']
+            if match['logo_b'] and match['logo_b'].startswith('//'): match['logo_b'] = 'https:' + match['logo_b']
 
-                    const div = document.createElement('div');
-                    div.className = 'match-card';
-                    div.innerHTML = `
-                        ${liveHtml}
-                        <div class="teams-area">
-                            <div class="team">
-                                <img src="${m.logo_a}" onerror="this.src='https://via.placeholder.com/50'">
-                                <span>${m.team_a}</span>
-                            </div>
-                            <div class="vs-area">${m.time}</div>
-                            <div class="team">
-                                <img src="${m.logo_b}" onerror="this.src='https://via.placeholder.com/50'">
-                                <span>${m.team_b}</span>
-                            </div>
-                        </div>
-                        <div class="info-area">
-                            <div class="ch-name">📺 ${m.channel}</div>
-                            <button class="watch-btn ${btnClass}" onclick="playMatch('${m.stream_url}')">
-                                ${btnText}
-                            </button>
-                        </div>
-                    `;
-                    box.appendChild(div);
-                });
-            })
-            .catch(err => document.getElementById('loading').innerText = "خطأ في الاتصال");
+            final_list.append({**match, "stream_url": url})
+            
+        # حفظ
+        output = {"updated_at": str(datetime.datetime.now()), "matches": final_list}
+        with open("channels.json", "w", encoding="utf-8") as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
+        print("Success!")
+        
+    except Exception as e:
+        print(f"Fatal Error: {e}")
 
-        function playMatch(url) {
-            // فتح الرابط ليتم التقاطه بواسطة مشغل الهاتف
-            window.location.href = url;
-        }
-    </script>
-</body>
+if __name__ == "__main__":
+    main()
 </html>
