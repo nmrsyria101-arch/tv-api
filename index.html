@@ -3,45 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تلفازي المباشر - Yacine Clone</title>
+    <title>Yacine Clone</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body { margin: 0; background-color: #121212; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding-bottom: 20px; }
+        body { margin: 0; background-color: #1a1a1a; color: white; font-family: sans-serif; padding-bottom: 20px; }
         
         /* الرأس */
-        .header { background: linear-gradient(45deg, #8b0000, #c90000); padding: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.5); position: sticky; top: 0; z-index: 100; }
-        .header h1 { margin: 0; font-size: 22px; color: white; }
+        .header { background: linear-gradient(90deg, #d32f2f, #b71c1c); padding: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.5); position: sticky; top: 0; z-index: 100; }
+        .header h1 { margin: 0; font-size: 20px; font-weight: bold; }
         
         /* زر الجدول */
         .schedule-btn {
-            background: #fff; color: #8b0000; border: none; padding: 8px 20px; 
-            border-radius: 20px; font-weight: bold; margin-top: 10px; cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.3s;
+            background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.5); 
+            padding: 8px 25px; border-radius: 20px; font-weight: bold; margin-top: 10px; cursor: pointer;
+            text-decoration: none; display: inline-block; font-size: 14px;
         }
-        .schedule-btn:active { transform: scale(0.95); }
-
-        /* حاوية الجدول (مخفية) */
-        #schedule-container {
-            display: none; width: 95%; margin: 15px auto; height: 500px; 
-            background: white; border-radius: 10px; overflow: hidden; border: 2px solid #444;
-        }
-        iframe { width: 100%; height: 100%; border: none; }
 
         /* القنوات */
         .container { padding: 15px; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; }
         .card { 
-            background: #1e1e1e; border-radius: 12px; width: 45%; padding: 15px 10px; 
-            text-align: center; cursor: pointer; transition: 0.2s; border: 1px solid #333;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            background: #252525; border-radius: 12px; width: 45%; padding: 15px 5px; 
+            text-align: center; cursor: pointer; border: 1px solid #333; position: relative; overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
-        .card:active { transform: scale(0.95); background: #333; border-color: #8b0000; }
-        .card img { width: 60px; height: 60px; margin-bottom: 10px; object-fit: contain; }
-        .card h3 { margin: 5px 0; font-size: 14px; color: #eee; }
+        .card:active { transform: scale(0.96); background: #333; border-color: #d32f2f; }
+        
+        /* اللوجو */
+        .card img { 
+            width: 60px; height: 60px; object-fit: contain; margin-bottom: 10px; 
+            background: #fff; border-radius: 50%; padding: 5px;
+        }
+        .card h3 { margin: 5px 0; font-size: 13px; color: #eee; font-weight: normal; }
 
         /* المشغل */
         #player-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 999; flex-direction: column; justify-content: center; align-items: center; }
         video { width: 100%; max-height: 100vh; }
-        .close-btn { position: absolute; top: 20px; right: 20px; color: white; background: rgba(255, 0, 0, 0.8); padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; z-index: 1000; backdrop-filter: blur(5px); }
+        .close-btn { position: absolute; top: 20px; right: 20px; color: white; background: rgba(211, 47, 47, 0.8); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; z-index: 1000; }
         
         .status { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
     </style>
@@ -49,51 +46,39 @@
 <body>
 
     <div class="header">
-        <h1>⚽ Yacine TV Clone</h1>
-        <button class="schedule-btn" onclick="toggleSchedule()">📅 عرض جدول المباريات</button>
-    </div>
-
-    <div id="schedule-container">
-        <iframe src="https://m.kooora.com/?region=-1&area=0"></iframe>
+        <h1>⚽ Yacine TV</h1>
+        <a href="https://m.kooora.com/?region=-1&area=0" target="_blank" class="schedule-btn">📅 جدول مباريات اليوم</a>
     </div>
     
-    <div id="loading" style="text-align:center; margin-top:50px; color: #888;">جاري البحث عن القنوات... 📡</div>
+    <div id="loading" style="text-align:center; margin-top:50px; color: #888;">جاري الاتصال بالسيرفر... 📡</div>
     <div class="container" id="channels-list"></div>
     <div class="status" id="last-update"></div>
 
     <div id="player-modal">
-        <div class="close-btn" onclick="closePlayer()">✖ إغلاق البث</div>
+        <div class="close-btn" onclick="closePlayer()">إغلاق البث ✖</div>
         <video id="video" controls autoplay playsinline></video>
     </div>
 
     <script>
-        // إظهار وإخفاء الجدول
-        function toggleSchedule() {
-            var box = document.getElementById('schedule-container');
-            if (box.style.display === 'block') {
-                box.style.display = 'none';
-            } else {
-                box.style.display = 'block';
-            }
-        }
-
         const jsonUrl = 'channels.json';
+        // صورة احتياطية في حال فشل تحميل اللوجو
+        const backupLogo = 'https://cdn-icons-png.flaticon.com/512/1165/1165187.png'; // أيقونة كرة قدم
 
         fetch(jsonUrl)
             .then(response => response.json())
             .then(data => {
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('last-update').innerText = 'آخر تحديث للسيرفر: ' + data.updated_at;
+                document.getElementById('last-update').innerText = 'تحديث تلقائي: ' + data.updated_at.split('.')[0];
                 
                 const list = document.getElementById('channels-list');
-                // ترتيب القنوات حسب الاسم
                 data.channels.sort((a, b) => a.name.localeCompare(b.name));
 
                 data.channels.forEach(channel => {
                     const card = document.createElement('div');
                     card.className = 'card';
+                    // هنا نستخدم onerror لتبديل الصورة اذا خربت
                     card.innerHTML = `
-                        <img src="${channel.logo}" alt="logo">
+                        <img src="${channel.logo}" onerror="this.src='${backupLogo}'" alt="TV">
                         <h3>${channel.name}</h3>
                     `;
                     card.onclick = () => openPlayer(channel.stream_url);
@@ -101,9 +86,36 @@
                 });
             })
             .catch(err => {
-                document.getElementById('loading').innerHTML = '<span style="color:red">فشل الاتصال! تأكد أن الروبوت عمل بنجاح.</span>';
+                document.getElementById('loading').innerHTML = '<span style="color:red">تأكد من تشغيل الروبوت في GitHub Actions</span>';
             });
 
+        function openPlayer(url) {
+            document.getElementById('player-modal').style.display = 'flex';
+            var video = document.getElementById('video');
+            
+            if (Hls.isSupported()) {
+                var hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play();
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play();
+                });
+            }
+        }
+
+        function closePlayer() {
+            document.getElementById('player-modal').style.display = 'none';
+            document.getElementById('video').pause();
+            document.getElementById('video').src = "";
+        }
+    </script>
+</body>
+</html>
         function openPlayer(url) {
             document.getElementById('player-modal').style.display = 'flex';
             var video = document.getElementById('video');
