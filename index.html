@@ -1,120 +1,91 @@
-import requests
-import json
-import datetime
-import re
-from bs4 import BeautifulSoup
-
-# --- إعدادات ---
-# رابط ملف القنوات
-IPTV_URL = "https://gist.githubusercontent.com/yasiralbeatiy/a078d245888ce7eb892e04d120f1420c/raw/a6b268326c30276367a62947e4dc862b1b171410/beinsport.m3u"
-# رابط المباريات (سنستخدم فيلجول لأنه أخف وأسرع من يلا كورة)
-MATCHES_URL = "https://www.filgoal.com/matches/today"
-
-def get_iptv_links():
-    print("Fetching IPTV...")
-    channels = {}
-    try:
-        response = requests.get(IPTV_URL, timeout=10)
-        lines = response.text.splitlines()
-        for i, line in enumerate(lines):
-            if "#EXTINF" in line and i+1 < len(lines):
-                # تنظيف الاسم (bein sports 1 -> beinsports1)
-                name = line.split(",")[-1].strip().lower()
-                clean = re.sub(r'[^a-z0-9]', '', name)
-                url = lines[i+1].strip()
-                if url.startswith("http"):
-                    channels[clean] = url
-    except Exception as e:
-        print(f"IPTV Error: {e}")
-    return channels
-
-def get_matches():
-    print("Fetching Matches...")
-    matches = []
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-        resp = requests.get(MATCHES_URL, headers=headers, timeout=10)
-        soup = BeautifulSoup(resp.content, 'html.parser')
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Center</title>
+    <style>
+        body { margin: 0; background-color: #121212; color: white; font-family: sans-serif; }
+        .header { background: #b71c1c; padding: 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index: 99; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         
-        # البحث عن المباريات في فيلجول
-        match_cards = soup.find_all('div', class_='mc-block')
+        .container { padding: 15px; max-width: 600px; margin: 0 auto; }
         
-        for card in match_cards:
-            try:
-                # استخراج البيانات
-                teams = card.find_all('div', class_='team-name')
-                if len(teams) < 2: continue
-                
-                team_a = teams[0].text.strip()
-                team_b = teams[1].text.strip()
-                
-                # الصور (قد لا تكون موجودة أحياناً)
-                imgs = card.find_all('img')
-                logo_a = imgs[0]['src'] if len(imgs) > 0 else ""
-                logo_b = imgs[1]['src'] if len(imgs) > 1 else ""
-                
-                # الوقت
-                time_area = card.find('div', class_='match-timing')
-                time_str = time_area.find('span').text.strip() if time_area else "اليوم"
-                
-                # القناة
-                ch_area = card.find('div', class_='channel-icon')
-                channel = ch_area.text.strip() if ch_area else "غير محدد"
-                
-                matches.append({
-                    "team_a": team_a, "logo_a": logo_a,
-                    "team_b": team_b, "logo_b": logo_b,
-                    "time": time_str,
-                    "channel": channel,
-                    "stream_url": "" # سيتم تعبئته لاحقاً
-                })
-            except:
-                continue
-                
-    except Exception as e:
-        print(f"Scraping Error: {e}")
-        # اضافة رسالة وهمية ليعرف المستخدم أن هناك خطأ
-        matches.append({
-            "team_a": "خطأ في", "logo_a": "",
-            "team_b": "المصدر", "logo_b": "",
-            "time": "الآن", "channel": "حاول لاحقاً",
-            "stream_url": ""
-        })
+        .match-card {
+            background: #1e1e1e; border-radius: 12px; padding: 15px; margin-bottom: 15px;
+            border: 1px solid #333; position: relative;
+        }
         
-    return matches
+        .teams-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .team { width: 35%; text-align: center; }
+        .team img { width: 50px; height: 50px; object-fit: contain; display: block; margin: 0 auto 5px; }
+        .team span { font-size: 13px; font-weight: bold; display: block; }
+        
+        .score-time { font-size: 18px; color: #888; font-weight: bold; }
+        
+        .footer-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #333; padding-top: 10px; }
+        .channel-info { color: #fbc02d; font-size: 12px; font-weight: bold; }
+        
+        .watch-btn {
+            background: #b71c1c; color: white; border: none; padding: 8px 20px; 
+            border-radius: 20px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 12px;
+        }
+        .watch-btn.disabled { background: #444; color: #aaa; pointer-events: none; }
+        
+        #loading { text-align: center; margin-top: 50px; color: #888; }
+    </style>
+</head>
+<body>
 
-def main():
-    # حتى لو فشل شيء، الكود سيكمل للنهاية
-    try:
-        iptv = get_iptv_links()
-        matches = get_matches()
-        
-        final_list = []
-        for match in matches:
-            # محاولة الربط
-            url = ""
-            target = re.sub(r'[^a-z0-9]', '', match['channel'].lower())
-            
-            for key, val in iptv.items():
-                if target in key or key in target:
-                    url = val
-                    break
-            
-            # تصحيح الروابط الناقصة للصور
-            if match['logo_a'] and match['logo_a'].startswith('//'): match['logo_a'] = 'https:' + match['logo_a']
-            if match['logo_b'] and match['logo_b'].startswith('//'): match['logo_b'] = 'https:' + match['logo_b']
+    <div class="header">⚽ مباريات اليوم</div>
+    
+    <div id="loading">جاري تحميل الجدول... ⏳</div>
+    <div class="container" id="matches-container"></div>
 
-            final_list.append({**match, "stream_url": url})
-            
-        # حفظ
-        output = {"updated_at": str(datetime.datetime.now()), "matches": final_list}
-        with open("channels.json", "w", encoding="utf-8") as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
-        print("Success!")
-        
-    except Exception as e:
-        print(f"Fatal Error: {e}")
+    <script>
+        // رابط ملف البيانات
+        fetch('channels.json')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                const container = document.getElementById('matches-container');
+                
+                if (!data.matches || data.matches.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;">لا توجد مباريات مهمة الآن</div>';
+                    return;
+                }
 
-if __name__ == "__main__":
-    main()
+                data.matches.forEach(match => {
+                    // التحقق من وجود رابط
+                    const hasLink = match.stream_url && match.stream_url.length > 5;
+                    
+                    const card = document.createElement('div');
+                    card.className = 'match-card';
+                    
+                    card.innerHTML = `
+                        <div class="teams-row">
+                            <div class="team">
+                                <img src="${match.logo_a || 'https://via.placeholder.com/50'}" onerror="this.src='https://via.placeholder.com/50'">
+                                <span>${match.team_a}</span>
+                            </div>
+                            <div class="score-time">${match.time}</div>
+                            <div class="team">
+                                <img src="${match.logo_b || 'https://via.placeholder.com/50'}" onerror="this.src='https://via.placeholder.com/50'">
+                                <span>${match.team_b}</span>
+                            </div>
+                        </div>
+                        <div class="footer-row">
+                            <div class="channel-info">📺 ${match.channel}</div>
+                            <a href="${hasLink ? match.stream_url : '#'}" class="watch-btn ${hasLink ? '' : 'disabled'}">
+                                ${hasLink ? '▶ شاهد المباراة' : 'غير متوفر'}
+                            </a>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            })
+            .catch(err => {
+                document.getElementById('loading').innerText = 'حدث خطأ في تحميل البيانات';
+            });
+    </script>
+</body>
 </html>
