@@ -1,0 +1,17 @@
+{
+  "updated_at": "2025-11-29",
+  "channels": [
+    {
+      "id": 1,
+      "name": "beIN Sports 1",
+      "stream_url": "ضع_رابط_تجريبي_هنا",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/BeIN_Sports_logo.svg/1200px-BeIN_Sports_logo.svg.png"
+    },
+    {
+      "id": 2,
+      "name": "beIN Sports 2",
+      "stream_url": "ضع_رابط_تجريبي_هنا",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/BeIN_Sports_logo.svg/1200px-BeIN_Sports_logo.svg.png"
+    }
+  ]
+}
